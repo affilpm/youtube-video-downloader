@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Verify OTP{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'user_assets/css/verify.css' %}">
+
+{% endblock %}
+
+{% block content %}
+<div class="otp-container">
+    <h2 class="otp-title">Verify Your Email</h2>
+    <p class="otp-subtitle">We've sent a 6-digit code to <strong>{{ email }}</strong></p>
+    
+    {% if messages %}
+        <div class="messages">
+            {% for message in messages %}
+                <div class="alert alert-{{ message.tags }}">
+                    {{ message }}
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+    
+    <form method="post">
+        {% csrf_token %}
+        <input type="text" 
+               name="otp" 
+               class="otp-input" 
+               placeholder="000000" 
+               maxlength="6" 
+               required 
+               autocomplete="off">
+        
+        <button type="submit" class="verify-btn">Verify OTP</button>
+    </form>
+    
+    <div class="resend-section">
+        <p>Didn't receive the code?</p>
+        <a href="{% url 'resend_otp' email %}" class="resend-btn" id="resendBtn">
+            Resend OTP
+        </a>
+        <div class="timer" id="timer" style="display: none;">
+            Resend available in <span id="countdown">60</span> seconds
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const resendBtn = document.getElementById('resendBtn');
+    const timer = document.getElementById('timer');
+    const countdown = document.getElementById('countdown');
+    
+    // Check if there's a stored timer
+    let timeLeft = localStorage.getItem('otpTimer');
+    if (timeLeft && timeLeft > 0) {
+        startTimer(parseInt(timeLeft));
+    }
+    
+    resendBtn.addEventListener('click', function(e) {
+        e.preventDefault();
+        
+        // Send resend request
+        fetch(this.href, {
+            method: 'GET',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Show success message
+                showMessage('OTP sent successfully!', 'success');
+                // Start 60 second timer
+                startTimer(60);
+            } else {
+                showMessage(data.message || 'Failed to send OTP', 'error');
+            }
+        })
+        .catch(error => {
+            showMessage('Failed to send OTP', 'error');
+        });
+    });
+    
+    function startTimer(seconds) {
+        timeLeft = seconds;
+        resendBtn.style.display = 'none';
+        timer.style.display = 'block';
+        
+        const timerInterval = setInterval(function() {
+            countdown.textContent = timeLeft;
+            localStorage.setItem('otpTimer', timeLeft);
+            
+            if (timeLeft <= 0) {
+                clearInterval(timerInterval);
+                resendBtn.style.display = 'inline-block';
+                timer.style.display = 'none';
+                localStorage.removeItem('otpTimer');
+            }
+            timeLeft--;
+        }, 1000);
+    }
+    
+    function showMessage(message, type) {
+        const messagesDiv = document.querySelector('.messages') || createMessagesDiv();
+        const alertDiv = document.createElement('div');
+        alertDiv.className = `alert alert-${type}`;
+        alertDiv.textContent = message;
+        messagesDiv.appendChild(alertDiv);
+        
+        // Remove message after 5 seconds
+        setTimeout(() => {
+            alertDiv.remove();
+        }, 5000);
+    }
+    
+    function createMessagesDiv() {
+        const messagesDiv = document.createElement('div');
+        messagesDiv.className = 'messages';
+        document.querySelector('.otp-container').insertBefore(messagesDiv, document.querySelector('form'));
+        return messagesDiv;
+    }
+    
+    // Auto-focus and format OTP input
+    const otpInput = document.querySelector('.otp-input');
+    otpInput.addEventListener('input', function(e) {
+        // Only allow numbers
+        this.value = this.value.replace(/[^0-9]/g, '');
+        
+        // Auto-submit when 6 digits are entered
+        if (this.value.length === 6) {
+            this.form.submit();
+        }
+    });
+    
+    otpInput.focus();
+});
+</script>
+{% endblock %}
